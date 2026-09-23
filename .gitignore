@@ -1,0 +1,30 @@
+# ============ 原始数据(大文件,不入版本库) ============
+/gis/
+/全国DEM*/
+
+# ============ 文档与压缩包 ============
+*.pdf
+*.doc
+*.docx
+*.pptx
+*.xls
+*.xlsx
+*.rar
+*.zip
+*.7z
+*.mxd
+
+# ============ Python ============
+__pycache__/
+*.pyc
+
+# ============ 系统 ============
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
+
+# ============ 运行时产物(可选,默认不入库) ============
+webmap/tmp/
+webmap/*.log
+webmap/heritage.geojson.tmp

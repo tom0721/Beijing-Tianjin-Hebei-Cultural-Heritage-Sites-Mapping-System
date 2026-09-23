@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>京津冀文物保护单位地图 · Test 版</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="libs/maplibre-gl.css">
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family:"Microsoft YaHei","PingFang SC",sans-serif; }
+  #map { width:100%; height:100%; }
+
+  .titlebar {
+    position:absolute; top:64px; left:12px; z-index:10;
+    background:rgba(255,255,255,.94); padding:10px 14px; border-radius:8px;
+    box-shadow:0 1px 6px rgba(0,0,0,.18); font-size:13px; max-width:340px;
+  }
+  .titlebar h1 { margin:0 0 4px; font-size:16px; color:#123a63; }
+  .titlebar .sub { color:#5a6b7c; }
+
+  /* ===== 筛选面板 ===== */
+  .filterbar {
+    position:absolute; top:64px; left:12px; z-index:10;
+    background:rgba(255,255,255,.96); border-radius:10px;
+    box-shadow:0 1px 8px rgba(0,0,0,.18); width:240px; font-size:13px;
+    overflow:hidden;
+  }
+  .fheader { display:flex; justify-content:space-between; align-items:center; padding:10px 14px 4px; }
+  .fheader .ftitle { font-size:15px; font-weight:700; color:#123a63; }
+  .fheader .fsub { font-size:11px; color:#94a3b8; margin-top:2px; }
+  #btn-toggle-filter { border:none; background:none; color:#5a6b7c; cursor:pointer; font-size:12px; padding:4px; }
+  #btn-toggle-filter:hover { color:#1f5f9e; }
+  .fbody { padding:0 14px 12px; }
+  .fbody label { display:block; margin-top:8px; color:#5a6b7c; }
+  .fbody select {
+    width:100%; box-sizing:border-box; padding:5px 8px; margin-top:3px;
+    border:1px solid #cbd5e0; border-radius:6px; font-size:13px; background:#fff; color:#1f2933;
+  }
+  .fbody select:focus { outline:none; border-color:#1f5f9e; }
+  .elabel { margin-top:10px; color:#5a6b7c; }
+  .elabel b { color:#1f2933; font-weight:600; }
+  .ranges { position:relative; height:24px; margin-top:2px; }
+  .etrack { position:absolute; top:10px; left:0; right:0; height:4px; border-radius:2px; background:#e2e8f0; }
+  .etrack .fill { position:absolute; top:0; height:100%; background:#1f5f9e; border-radius:2px; }
+  .ranges input[type=range] {
+    position:absolute; left:0; width:100%; margin:0; height:24px;
+    -webkit-appearance:none; appearance:none; background:transparent; pointer-events:none;
+  }
+  .ranges input[type=range]::-webkit-slider-thumb {
+    pointer-events:auto; -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:#1f5f9e; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer;
+  }
+  .ranges input[type=range]::-moz-range-thumb {
+    pointer-events:auto; width:12px; height:12px; border-radius:50%;
+    background:#1f5f9e; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer;
+  }
+  .factions { display:flex; gap:6px; margin-top:10px; }
+  .factions button { flex:1; padding:6px 0; border-radius:6px; font-size:13px; cursor:pointer; }
+  #btn-apply { background:#1f5f9e; color:#fff; border:1px solid #1f5f9e; }
+  #btn-apply:hover { background:#174d7d; }
+  #btn-reset { background:#fff; color:#334155; border:1px solid #cbd5e0; }
+  #btn-reset:hover { background:#f1f5f9; }
+  .fcount { margin-top:8px; color:#5a6b7c; font-size:12px; }
+  .fcount b { color:#1f2933; }
+
+  /* 顶部搜索框 */
+  .searchbox {
+    position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20;
+    width:360px; max-width:calc(100% - 280px);
+  }
+  .searchbox input {
+    width:100%; box-sizing:border-box; padding:9px 14px 9px 36px;
+    border:1px solid #cbd5e0; border-radius:20px; font-size:14px; outline:none;
+    background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") 12px 50% no-repeat;
+    box-shadow:0 1px 6px rgba(0,0,0,.15);
+  }
+  .searchbox input:focus { border-color:#1f5f9e; box-shadow:0 0 0 2px rgba(31,95,158,.15); }
+  .suggest {
+    display:none; margin-top:4px; background:#fff; border:1px solid #e3e8ef;
+    border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.18); overflow:hidden;
+    max-height:320px; overflow-y:auto;
+  }
+  .suggest .si {
+    padding:8px 14px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:baseline;
+  }
+  .suggest .si:hover, .suggest .si.active { background:#eef3f8; }
+  .suggest .si .si-meta { color:#94a3b8; font-size:12px; white-space:nowrap; }
+  .suggest .si.empty { color:#94a3b8; cursor:default; }
+  .suggest .si.empty:hover { background:#fff; }
+
+  .switcher {
+    position:absolute; top:12px; right:12px; z-index:10;
+    display:flex; gap:6px; background:rgba(255,255,255,.94);
+    padding:6px; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,.18);
+  }
+  .switcher button {
+    border:1px solid #cbd5e0; background:#fff; padding:6px 14px;
+    border-radius:6px; cursor:pointer; font-size:13px; color:#1f2933;
+    transition:all .15s;
+  }
+  .switcher button:hover { background:#eef3f8; }
+  .switcher button.active { background:#1f5f9e; color:#fff; border-color:#1f5f9e; }
+
+  .legend {
+    position:absolute; bottom:26px; left:12px; z-index:10;
+    background:rgba(255,255,255,.94); padding:8px 12px; border-radius:8px;
+    font-size:13px; box-shadow:0 1px 6px rgba(0,0,0,.18); line-height:1.7;
+  }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+
+  .maplibregl-popup-content { font-size:13px; line-height:1.65; }
+  .maplibregl-popup-content .ptitle { font-size:15px; font-weight:700; margin-bottom:5px; color:#123a63; }
+  .maplibregl-popup-content .row { margin:2px 0; }
+  .maplibregl-popup-content .row b { color:#334155; }
+  .maplibregl-popup-content img.photo { width:100%; max-height:130px; object-fit:cover; border-radius:6px; margin-top:6px; }
+  .maplibregl-popup-content .nophoto { color:#94a3b8; margin-top:4px; }
+  .maplibregl-popup-content .ext { margin-top:7px; }
+
+  .tip {
+    position:absolute; bottom:26px; right:12px; z-index:10;
+    background:rgba(255,255,255,.94); padding:6px 12px; border-radius:8px;
+    font-size:12px; color:#5a6b7c; box-shadow:0 1px 6px rgba(0,0,0,.18);
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="searchbox">
+  <input id="search-input" type="text" placeholder="输入文保单位名称搜索（支持模糊匹配）" autocomplete="off">
+  <div id="search-suggest" class="suggest"></div>
+</div>
+
+<div class="filterbar" id="filterbar">
+  <div class="fheader">
+    <div>
+      <div class="ftitle">京津冀文物保护单位地图</div>
+      <div class="fsub">按条件筛选文保单位点位</div>
+    </div>
+    <button id="btn-toggle-filter" title="展开/收起">收起 ▲</button>
+  </div>
+  <div class="fbody" id="fbody">
+    <label>级别
+      <select id="f-level">
+        <option value="全部">全部</option>
+        <option value="国家级">国家级</option>
+        <option value="省级">省级</option>
+      </select>
+    </label>
+    <label>时代
+      <select id="f-era"><option value="全部">全部</option></select>
+    </label>
+    <label>所属
+      <select id="f-city"><option value="全部">全部</option></select>
+    </label>
+    <div class="elabel">高程 <b id="elev-text"></b></div>
+    <div class="ranges">
+      <div class="etrack"><div class="fill" id="elev-fill"></div></div>
+      <input type="range" id="elev-lo" min="1" max="2107" step="1" value="1">
+      <input type="range" id="elev-hi" min="1" max="2107" step="1" value="2107">
+    </div>
+    <div class="factions">
+      <button id="btn-apply">应用筛选</button>
+      <button id="btn-reset">重置</button>
+    </div>
+    <div class="fcount" id="fcount"></div>
+  </div>
+</div>
+
+<div class="switcher">
+  <button id="btn-sat">卫星图</button>
+  <button id="btn-3d">3D 高程</button>
+</div>
+
+<div class="legend" id="legend"></div>
+<div class="tip">点击地图上的圆点查看文保单位信息</div>
+
+<script src="libs/maplibre-gl.js"></script>
+<script>
+// ================= 数据(GCJ-02 高德坐标系, 内联; 由 geocode_rebuild.py 批量纠偏) =================
+const HERITAGE = {{HERITAGE_DATA}};
+const BOUNDARY = {{BOUNDARY_DATA}};
+
+const N_LEVEL = {国家级: 0, 省级: 0};
+HERITAGE.features.forEach(f => { N_LEVEL[f.properties.level] = (N_LEVEL[f.properties.level] || 0) + 1; });
+
+// ================= 底图(默认政区图 = 高德, GCJ-02) =================
+const SOURCES = {
+  street: {
+    type: "raster",
+    tiles: [
+      "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+      "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+      "https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+      "https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}"
+    ],
+    tileSize: 256, maxzoom: 18, attribution: "© 高德地图"
+  },
+  sat: {
+    type: "raster",
+    tiles: [
+      "https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}",
+      "https://webst02.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}",
+      "https://webst03.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}",
+      "https://webst04.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}"
+    ],
+    tileSize: 256, maxzoom: 18, attribution: "© 高德地图"
+  },
+  terrain: {
+    type: "raster-dem",
+    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    tileSize: 256, maxzoom: 15, encoding: "terrarium", attribution: "© AWS Terrarium"
+  }
+};
+
+const map = new maplibregl.Map({
+  container: "map",
+  center: [116.4, 39.1],
+  zoom: 6.6,
+  maxPitch: 85,
+  style: {
+    version: 8,
+    sources: { street: SOURCES.street, sat: SOURCES.sat },
+    layers: [
+      { id: "base-street", type: "raster", source: "street" },
+      { id: "base-sat", type: "raster", source: "sat", layout: { visibility: "none" } }
+    ]
+  }
+});
+
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-left");
+
+// 图例
+document.getElementById("legend").innerHTML =
+  '<div><span class="dot" style="background:#d64545;"></span>国家级 (' + (N_LEVEL["国家级"] || 0) + ")</div>" +
+  '<div><span class="dot" style="background:#2f6fb3;"></span>省级 (' + (N_LEVEL["省级"] || 0) + ")</div>";
+
+// ================= 弹窗 =================
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function buildPopupHTML(p) {
+  const photo = p.img
+    ? '<img class="photo" src="' + esc(p.img) + '" alt="' + esc(p.name) + '">'
+    : '<div class="nophoto">（图片待补充，可在 heritage.geojson 的 img 字段添加 URL）</div>';
+  return (
+    '<div class="ptitle">' + esc(p.name) + "</div>" +
+    '<div class="row"><b>级别：</b>' + esc(p.level) + "</div>" +
+    '<div class="row"><b>时代：</b>' + esc(p.era || "—") + "</div>" +
+    '<div class="row"><b>所属：</b>' + esc(p.city || "—") + "</div>" +
+    '<div class="row"><b>经纬度(GCJ-02)：</b>' + Number(p.gcj_lon != null ? p.gcj_lon : p.lon).toFixed(5) + ", " + Number(p.gcj_lat != null ? p.gcj_lat : p.lat).toFixed(5) + "</div>" +
+    '<div class="row"><b>高程：</b>' + (p.elev != null ? p.elev + " m" : "—") + "</div>" +
+    (p.geo_addr ? '<div class="row"><b>匹配地址：</b>' + esc(p.geo_addr) + "</div>" : "") +
+    (p.coord_src ? '<div class="row"><b>坐标来源：</b>' + (p.coord_src === "geocode" ? "高德精确匹配" : "本地转换(待精修)") + "</div>" : "") +
+    photo +
+    '<div class="ext"><a href="https://www.baidu.com/s?wd=' + encodeURIComponent(p.name) +
+    '" target="_blank" rel="noopener">百度搜索详情 →</a></div>'
+  );
+}
+function showPopup(lngLat, p) {
+  new maplibregl.Popup({ offset: 18, maxWidth: "280px" })
+    .setLngLat(lngLat).setHTML(buildPopupHTML(p)).addTo(map);
+}
+
+map.on("load", () => {
+  // 行政边界
+  map.addSource("boundary", { type: "geojson", data: BOUNDARY });
+  map.addLayer({
+    id: "boundary-line", type: "line", source: "boundary",
+    paint: { "line-color": "#8a6d3b", "line-width": 1.5, "line-opacity": 0.85,
+             "line-dasharray": [3, 2] }
+  });
+
+  // 文保单位点位
+  map.addSource("heritage", { type: "geojson", data: HERITAGE });
+  map.addLayer({
+    id: "heritage-pt",
+    type: "circle",
+    source: "heritage",
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3.5, 9, 6, 13, 8],
+      "circle-color": ["match", ["get", "level"], "国家级", "#d64545", "#2f6fb3"],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1.2,
+      "circle-opacity": 0.9
+    }
+  });
+
+  // 搜索高亮图层(初始为空)
+  map.addSource("highlight", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer({
+    id: "highlight-ring", type: "circle", source: "highlight",
+    paint: {
+      "circle-radius": 18, "circle-color": "#f59e0b", "circle-opacity": 0.3,
+      "circle-stroke-color": "#b45309", "circle-stroke-width": 3
+    }
+  });
+
+  // 点击点位弹窗
+  map.on("click", "heritage-pt", (e) => {
+    showPopup(e.lngLat, e.features[0].properties);
+  });
+  map.on("mouseenter", "heritage-pt", () => { map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", "heritage-pt", () => { map.getCanvas().style.cursor = ""; });
+});
+
+// ================= 底图叠加开关 =================
+let satOn = false, d3On = false;
+
+function setSat(on) {
+  satOn = on;
+  document.getElementById("btn-sat").classList.toggle("active", satOn);
+  map.setLayoutProperty("base-sat", "visibility", satOn ? "visible" : "none");
+}
+function set3D(on) {
+  d3On = on;
+  document.getElementById("btn-3d").classList.toggle("active", d3On);
+  if (d3On) {
+    if (!map.getSource("terrain")) map.addSource("terrain", SOURCES.terrain);
+    map.setTerrain({ source: "terrain", exaggeration: 1.5 });
+    map.easeTo({ pitch: 60, duration: 800 });
+    if (!satOn) setSat(true);          // 3D 高程自动叠加卫星图
+  } else {
+    map.setTerrain(null);
+    map.easeTo({ pitch: 0, duration: 800 });
+  }
+}
+document.getElementById("btn-sat").addEventListener("click", () => setSat(!satOn));
+document.getElementById("btn-3d").addEventListener("click", () => set3D(!d3On));
+
+// ================= 名称搜索(模糊匹配 + 定位高亮) =================
+const searchInput = document.getElementById("search-input");
+const suggestBox = document.getElementById("search-suggest");
+let debounceTimer = null;
+let lastHits = [];
+
+function doSearch(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    suggestBox.style.display = "none";
+    lastHits = [];
+    return;
+  }
+  lastHits = HERITAGE.features.filter(f => f.properties.name.toLowerCase().includes(q)).slice(0, 12);
+  if (!lastHits.length) {
+    suggestBox.innerHTML = '<div class="si empty">未找到匹配的文保单位</div>';
+  } else {
+    suggestBox.innerHTML = lastHits.map((f, i) =>
+      '<div class="si" data-i="' + i + '">' +
+      '<span>' + esc(f.properties.name) + '</span>' +
+      '<span class="si-meta">' + esc(f.properties.level) +
+        (f.properties.city ? " · " + esc(f.properties.city) : "") + "</span>" +
+      "</div>"
+    ).join("");
+  }
+  suggestBox.style.display = "block";
+}
+
+function gotoFeature(f) {
+  const p = f.properties;
+  const coords = f.geometry.coordinates;   // GCJ 坐标
+  suggestBox.style.display = "none";
+  searchInput.blur();
+
+  map.flyTo({ center: coords, zoom: 12, essential: true, duration: 1500 });
+  if (map.getSource("highlight")) {
+    map.getSource("highlight").setData({ type: "FeatureCollection", features: [f] });
+  }
+  setTimeout(() => showPopup(coords, p), 1600);   // 等飞行结束后弹窗
+}
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => doSearch(searchInput.value), 150);
+});
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && lastHits.length) {
+    gotoFeature(lastHits[0]);
+  }
+});
+suggestBox.addEventListener("mousedown", (e) => {
+  const item = e.target.closest(".si[data-i]");
+  if (item) gotoFeature(lastHits[Number(item.getAttribute("data-i"))]);
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".searchbox")) suggestBox.style.display = "none";
+});
+
+// ================= 点位筛选器 =================
+const ELEV_MIN = 1, ELEV_MAX = 2107;
+const fLevel = document.getElementById("f-level");
+const fEra = document.getElementById("f-era");
+const fCity = document.getElementById("f-city");
+const elevLo = document.getElementById("elev-lo");
+const elevHi = document.getElementById("elev-hi");
+const elevFill = document.getElementById("elev-fill");
+const elevText = document.getElementById("elev-text");
+const fcount = document.getElementById("fcount");
+const fbody = document.getElementById("fbody");
+
+// 动态选项: 时代(保持数据分类顺序)、城市(按名称排序)
+const eraSet = [];
+HERITAGE.features.forEach(f => { if (!eraSet.includes(f.properties.era)) eraSet.push(f.properties.era); });
+eraSet.forEach(e => {
+  const op = document.createElement("option");
+  op.value = e; op.textContent = e;
+  fEra.appendChild(op);
+});
+const citySet = [];
+HERITAGE.features.forEach(f => { const c = f.properties.city; if (c && !citySet.includes(c)) citySet.push(c); });
+citySet.sort((a, b) => a.localeCompare(b, "zh"));
+citySet.forEach(c => {
+  const op = document.createElement("option");
+  op.value = c; op.textContent = c;
+  fCity.appendChild(op);
+});
+
+// 高程双滑块
+function elevPct(v) { return (v - ELEV_MIN) / (ELEV_MAX - ELEV_MIN) * 100; }
+function updateElev() {
+  const lo = +elevLo.value, hi = +elevHi.value;
+  elevFill.style.left = elevPct(lo) + "%";
+  elevFill.style.right = (100 - elevPct(hi)) + "%";
+  elevText.textContent = lo + " – " + hi + " m";
+}
+elevLo.addEventListener("input", () => { if (+elevLo.value > +elevHi.value) elevLo.value = elevHi.value; updateElev(); });
+elevHi.addEventListener("input", () => { if (+elevHi.value < +elevLo.value) elevHi.value = elevLo.value; updateElev(); });
+updateElev();
+
+// 应用筛选
+function buildFilter() {
+  const lv = fLevel.value, er = fEra.value, ci = fCity.value;
+  const lo = +elevLo.value, hi = +elevHi.value;
+  const conds = [];
+  if (lv !== "全部") conds.push(["==", ["get", "level"], lv]);
+  if (er !== "全部") conds.push(["==", ["get", "era"], er]);
+  if (ci !== "全部") conds.push(["==", ["get", "city"], ci]);
+  if (lo > ELEV_MIN || hi < ELEV_MAX) {
+    conds.push([">=", ["coalesce", ["get", "elev"], -9999], lo]);
+    conds.push(["<=", ["coalesce", ["get", "elev"], -9999], hi]);
+  }
+  return conds.length ? ["all"].concat(conds) : null;
+}
+function countMatches() {
+  const lv = fLevel.value, er = fEra.value, ci = fCity.value;
+  const lo = +elevLo.value, hi = +elevHi.value;
+  const elevActive = lo > ELEV_MIN || hi < ELEV_MAX;
+  let n = 0;
+  HERITAGE.features.forEach(ft => {
+    const p = ft.properties;
+    if (lv !== "全部" && p.level !== lv) return;
+    if (er !== "全部" && p.era !== er) return;
+    if (ci !== "全部" && p.city !== ci) return;
+    if (elevActive) {
+      const e = (p.elev == null || p.elev < -9000) ? -9999 : p.elev;
+      if (e < lo || e > hi) return;
+    }
+    n++;
+  });
+  return n;
+}
+function applyFilter() {
+  updateElev();   // 同步滑块文本(兼容外部改值)
+  const filter = buildFilter();
+  if (!map.getLayer("heritage-pt")) {
+    setTimeout(applyFilter, 300);
+    return;
+  }
+  map.setFilter("heritage-pt", filter);
+  const n = countMatches();
+  fcount.innerHTML = "当前显示 <b>" + n + "</b> 处" + (filter ? "" : "(全部)");
+}
+document.getElementById("btn-apply").addEventListener("click", applyFilter);
+document.getElementById("btn-reset").addEventListener("click", () => {
+  fLevel.value = "全部"; fEra.value = "全部"; fCity.value = "全部";
+  elevLo.value = ELEV_MIN; elevHi.value = ELEV_MAX; updateElev();
+  applyFilter();
+});
+
+// 折叠/展开
+document.getElementById("btn-toggle-filter").addEventListener("click", () => {
+  const hidden = fbody.style.display === "none";
+  fbody.style.display = hidden ? "" : "none";
+  document.getElementById("btn-toggle-filter").textContent = hidden ? "收起 ▲" : "展开 ▼";
+});
+</script>
+</body>
+</html>
