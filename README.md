@@ -36,9 +36,6 @@
 
 ## 数据与构建
 
-- 源数据:`gis/新建文件夹/终版/京津冀文物保护单位包含高程.dbf`(2340 条) + 三市 geoJson 边界
-- 重新构建:`python webmap/build.py`(需 dbfread/shapely)
-- 构建逻辑:读 dbf → 按(名称, 坐标)去重、国家级优先 → 1838 点 → 空间归属 13 地市 → 输出 geojson 并内联进 index.html;已纠偏坐标会自动合并保留
 - **坐标精修(高德 API)**:`python webmap/geocode_rebuild.py`
   - 对 1838 条按「名称+城市」批量调高德地理编码 API,重新取精确坐标
   - 输出坐标直接为 **GCJ-02**(高德坐标系),页面不再做任何坐标转换
